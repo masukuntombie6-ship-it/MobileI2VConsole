@@ -1,0 +1,52 @@
+
+name: Android test build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Get project
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      - name: Find project file
+        shell: pwsh
+        run: |
+          $project = Get-ChildItem -Recurse -Filter *.csproj |
+            Select-Object -First 1
+          if (-not $project) {
+            throw "No .csproj file found"
+          }
+          "PROJECT_FILE=$($project.FullName)" |
+            Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build Android APK
+        shell: pwsh
+        run: |
+          dotnet publish "$env:PROJECT_FILE" `
+            -f net10.0-android `
+            -c Release `
+            -p:AndroidPackageFormat=apk `
+            -o "$env:GITHUB_WORKSPACE\apk-output"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: MobileI2VConsole-test-apk
+          path: apk-output/**/*.apk
+          if-no-files-found: error
+          retention-days: 3
+          
